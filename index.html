@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <title>รายงานติดตามสถานะงานเขตพื้นที่ 86000 - 86230</title>
+    <!-- โหลด Chart.js สำหรับทำกราฟ -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Sarabun', 'Segoe UI', Tahoma, sans-serif; margin: 20px; background-color: #f0f3f8; color: #333; }
+        h2, h3 { color: #1a365d; border-bottom: 2px solid #cbd5e0; padding-bottom: 8px; margin-top: 25px; }
+        .header-panel { background: #1a365d; color: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .header-panel h2 { color: #fff; border-bottom: none; margin: 0 0 5px 0; }
+        .upload-section { background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border-left: 5px solid #3182ce; }
+        
+        .dashboard-container { margin-bottom: 20px; }
+        .card-box { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; flex-direction: column; }
+        
+        .summary-container { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
+        .summary-card { background: #fff; padding: 15px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); font-size: 14px; min-width: 140px; flex: 1; border-top: 4px solid #3182ce; }
+        .summary-card .app-name { font-weight: bold; color: #2c5282; margin-bottom: 5px; }
+        .summary-card .count { font-size: 20px; font-weight: bold; color: #c53030; }
+
+        .controls { margin-bottom: 15px; display: flex; gap: 10px; }
+        button { padding: 9px 18px; background-color: #2b6cb0; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold; transition: background 0.2s; }
+        button:hover { background-color: #2c5282; }
+        button.btn-success { background-color: #2f855a; }
+        button.btn-success:hover { background-color: #276749; }
+        button:disabled { background-color: #cbd5e0; cursor: not-allowed; }
+
+        .table-responsive { background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 30px; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px 14px; border: 1px solid #e2e8f0; text-align: left; font-size: 14px; }
+        th { background-color: #2b6cb0; color: white; font-weight: 600; }
+        tr:nth-child(even) { background-color: #f7fafc; }
+        
+        .badge-pending { background-color: #feebc8; color: #744210; padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .badge-closed { background-color: #c6f6d5; color: #22543d; padding: 4px 10px; border-radius: 4px; font-weight: bold; }
+        #errorLog { color: #c53030; margin-top: 10px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="header-panel">
+        <h2>รายงานติดตามสถานะงานเขตพื้นที่ (รหัสไปรษณีย์ 86000 - 86230)</h2>
+        <p style="margin: 0; color: #e2e8f0; font-size: 14px;">ระบบสรุปและวิเคราะห์ข้อมูลจุดรับสินค้าแยกตามรหัสไปรษณีย์และช่องทาง</p>
+    </div>
+
+    <div class="upload-section">
+        <label for="csvFile" style="font-weight: bold; display: block; margin-bottom: 8px; color: #2d3748;">อัปโหลดไฟล์ข้อมูลรายงาน (CSV รูปแบบ UTF-8):</label>
+        <input type="file" id="csvFile" accept=".csv" onchange="handleFileSelect(event)">
+        <div id="errorLog"></div>
+    </div>
+
+    <!-- ส่วนสรุปตัวเลขแยกตาม App -->
+    <div id="summaryContainer" class="summary-container">
+        <div class="summary-card" style="border-top-color: #c53030;">
+            <div class="app-name">รวมยังไม่ปิดงาน</div>
+            <div class="count">0 <span style="font-size: 12px; color: #718096; font-weight: normal;">รายการ</span></div>
+        </div>
+    </div>
+
+    <!-- ส่วนแสดงกราฟแท่งกองซ้อนแนวตั้งตามรหัสไปรษณีย์ -->
+    <div class="dashboard-container">
+        <div class="card-box">
+            <h3>ที่ทำการที่ยังไม่ได้ปิดงาน ณ.สถานะล่าสุด (แสดง App ที่มีการBooking ของที่ทำการ)</h3>
+            <div style="position: relative; height: 350px; width: 100%;">
+                <canvas id="postalChart"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <div class="controls">
+        <button id="toggleFilterBtn" onclick="toggleFilter()" disabled>แสดงเฉพาะ: ยังไม่ปิดงาน (ตารางหลัก)</button>
+        <button id="exportBtn" class="btn-success" onclick="exportToCSV()" disabled>ดาวน์โหลดข้อมูลเป็น CSV</button>
+    </div>
+
+    <!-- ตารางข้อมูลหลักทั้งหมด -->
+    <div class="table-responsive">
+        <h3>รายการข้อมูลทั้งหมด (ช่วงรหัสไปรษณีย์ 86000 - 86230)</h3>
+        <table id="dataTable">
+            <thead>
+                <tr id="tableHeader">
+                    <th>กรุณาอัปโหลดไฟล์ CSV</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody">
+                <tr>
+                    <td style="text-align: center; color: #a0aec0;">ยังไม่มีข้อมูลในตาราง</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        let headers = [];
+        let rawData = [];
+        let filteredData = [];
+        let showOnlyActive = false;
+        let postalChartInstance = null;
+
+        // กำหนดชุดสีมาตรฐานสำหรับแต่ละ App
+        const appColorMap = {
+            'POSTSABUY': '#3182ce',    // ฟ้า
+            'LINE_OA': '#38a169',      // เขียว
+            'THP_HOSPITAL': '#dd6b20', // ส้ม
+            'SABUY_FRUIT': '#805ad5',  // ม่วง
+            'THP_POSTSABUY': '#d69e2e',// เหลืองทอง
+            'ISHIPSERVICE': '#e53e3e', // แดง
+            'THP_SHOPEE': '#00b5d8',   // ฟ้าคราม
+            'THP_EXPRESS': '#ed64a6'   // ชมพู
+        };
+
+        function getAppColor(appName, index) {
+            if (appColorMap[appName]) return appColorMap[appName];
+            const fallbackColors = ['#4a5568', '#2b6cb0', '#2f855a', '#9c4221', '#553c9a', '#b7791f'];
+            return fallbackColors[index % fallbackColors.length];
+        }
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            document.getElementById("errorLog").innerText = "";
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    parseCSV(e.target.result);
+                } catch (err) {
+                    document.getElementById("errorLog").innerText = "เกิดข้อผิดพลาดในการอ่านไฟล์: " + err.message;
+                }
+            };
+            reader.readAsText(file, "UTF-8");
+        }
+
+        function parseCSV(text) {
+            const lines = text.split(/\r\n|\n/);
+            if (lines.length === 0) return;
+
+            headers = lines[0].split(",").map(h => h.trim().replace(/^["']|["']$/g, ""));
+            
+            const postalIdx = headers.findIndex(h => h.includes("รหัสไปรษณีย์"));
+            const appIdx = headers.findIndex(h => h.toUpperCase().includes("APP"));
+            const statusIdx = headers.findIndex(h => h.includes("สถานะ") && !h.includes("เวลา"));
+
+            if (postalIdx === -1) {
+                document.getElementById("errorLog").innerText = "ไม่พบคอลัมน์ 'รหัสไปรษณีย์' ในไฟล์ กรุณาตรวจสอบหัวตาราง";
+                return;
+            }
+
+            let parsedData = [];
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+
+                const row = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(val => 
+                    val.trim().replace(/^["']|["']$/g, "").replace(/^=/, "").replace(/^["']|["']$/g, "")
+                );
+
+                const postalVal = row[postalIdx] || "";
+                const postalNum = parseInt(postalVal.replace(/\D/g, ""), 10);
+
+                if (postalNum >= 86000 && postalNum <= 86230) {
+                    parsedData.push(row);
+                }
+            }
+
+            parsedData.sort((a, b) => {
+                const pA = parseInt((a[postalIdx] || "").replace(/\D/g, ""), 10) || 0;
+                const pB = parseInt((b[postalIdx] || "").replace(/\D/g, ""), 10) || 0;
+                return pA - pB;
+            });
+
+            rawData = parsedData;
+            showOnlyActive = false;
+            
+            const btn = document.getElementById("toggleFilterBtn");
+            btn.innerText = "แสดงเฉพาะ: ยังไม่ปิดงาน (ตารางหลัก)";
+            btn.style.backgroundColor = "#2b6cb0";
+            btn.disabled = false;
+            document.getElementById("exportBtn").disabled = false;
+
+            updateDashboard(postalIdx, appIdx, statusIdx);
+            renderTable();
+        }
+
+        function updateDashboard(postalIdx, appIdx, statusIdx) {
+            let pendingItems = rawData;
+            if (statusIdx !== -1) {
+                pendingItems = rawData.filter(row => {
+                    const status = row[statusIdx] || "";
+                    return !status.includes("ปิดงาน");
+                });
+            }
+
+            // 1. สรุปยอดตาม App เพื่อทำ Card ด้านบน
+            const appCounts = {};
+            if (appIdx !== -1) {
+                pendingItems.forEach(row => {
+                    const app = row[appIdx] || "ไม่ระบุ";
+                    appCounts[app] = (appCounts[app] || 0) + 1;
+                });
+            }
+
+            // อัปเดตการ์ดตัวเลขรวมด้านบน
+            let html = `
+                <div class="summary-card" style="border-top-color: #c53030;">
+                    <div class="app-name">รวมยังไม่ปิดงาน</div>
+                    <div class="count">${pendingItems.length} <span style="font-size: 12px; color: #718096; font-weight: normal;">รายการ</span></div>
+                </div>
+            `;
+            let appIndex = 0;
+            for (const [app, count] of Object.entries(appCounts)) {
+                const appColor = getAppColor(app, appIndex++);
+                html += `
+                    <div class="summary-card" style="border-top-color: ${appColor};">
+                        <div class="app-name">${app}</div>
+                        <div class="count">${count} <span style="font-size: 12px; color: #718096; font-weight: normal;">รายการ</span></div>
+                    </div>
+                `;
+            }
+            document.getElementById("summaryContainer").innerHTML = html;
+
+            // 2. วาดกราฟแท่งกองซ้อนแนวตั้งตามรหัสไปรษณีย์
+            updatePostalVerticalStackedChart(pendingItems, postalIdx, appIdx);
+        }
+
+        function updatePostalVerticalStackedChart(pendingItems, postalIdx, appIdx) {
+            const ctx = document.getElementById('postalChart').getContext('2d');
+
+            const postalSet = new Set();
+            const appSet = new Set();
+
+            pendingItems.forEach(row => {
+                const postal = row[postalIdx] || "ไม่ระบุ";
+                const app = appIdx !== -1 ? (row[appIdx] || "ไม่ระบุ") : "ไม่ระบุ";
+                postalSet.add(postal);
+                appSet.add(app);
+            });
+
+            const postalLabels = Array.from(postalSet).sort((a, b) => parseInt(a.replace(/\D/g, "")) - parseInt(b.replace(/\D/g, "")));
+            const appList = Array.from(appSet);
+
+            const datasets = appList.map((app, idx) => {
+                const dataCounts = postalLabels.map(postal => {
+                    return pendingItems.filter(row => 
+                        (row[postalIdx] || "ไม่ระบุ") === postal && 
+                        (appIdx !== -1 ? (row[appIdx] || "ไม่ระบุ") : "ไม่ระบุ") === app
+                    ).length;
+                });
+
+                return {
+                    label: app,
+                    data: dataCounts,
+                    backgroundColor: getAppColor(app, idx),
+                    borderRadius: 2
+                };
+            });
+
+            if (postalChartInstance) {
+                postalChartInstance.destroy();
+            }
+
+            postalChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: postalLabels,
+                    datasets: datasets
+                },
+                options: {
+                    indexAxis: 'x', // กราฟแนวตั้ง (Vertical)
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            stacked: true,
+                            ticks: {
+                                font: { size: 14, weight: 'bold' },
+                                color: '#1a365d'
+                            }
+                        },
+                        y: {
+                            stacked: true,
+                            beginAtZero: true,
+                            ticks: { stepSize: 1 }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                boxWidth: 14,
+                                font: { size: 13, weight: 'bold' }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderTable() {
+            const headerTr = document.getElementById("tableHeader");
+            const tbody = document.getElementById("tableBody");
+            
+            headerTr.innerHTML = headers.map(h => `<th>${h}</th>`).join("");
+            tbody.innerHTML = "";
+
+            const statusIdx = headers.findIndex(h => h.includes("สถานะ") && !h.includes("เวลา"));
+
+            filteredData = rawData.filter(row => {
+                if (showOnlyActive && statusIdx !== -1) {
+                    const status = row[statusIdx] || "";
+                    return !status.includes("ปิดงาน");
+                }
+                return true;
+            });
+
+            if (filteredData.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="${headers.length}" style="text-align: center; color: #718096;">ไม่พบข้อมูลในช่วงรหัสไปรษณีย์ 86000 - 86230</td></tr>`;
+                return;
+            }
+
+            filteredData.forEach(row => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = row.map((val, idx) => {
+                    let displayVal = val;
+                    if (idx === statusIdx) {
+                        const badgeClass = val.includes("ปิดงาน") ? "badge-closed" : "badge-pending";
+                        displayVal = `<span class="${badgeClass}">${val}</span>`;
+                    }
+                    return `<td>${displayVal}</td>`;
+                }).join("");
+                tbody.appendChild(tr);
+            });
+        }
+
+        function toggleFilter() {
+            showOnlyActive = !showOnlyActive;
+            const btn = document.getElementById("toggleFilterBtn");
+            if (showOnlyActive) {
+                btn.innerText = "แสดงทั้งหมด (ตารางหลัก)";
+                btn.style.backgroundColor = "#2f855a";
+            } else {
+                btn.innerText = "แสดงเฉพาะ: ยังไม่ปิดงาน (ตารางหลัก)";
+                btn.style.backgroundColor = "#2b6cb0";
+            }
+            renderTable();
+        }
+
+        function exportToCSV() {
+            if (filteredData.length === 0) return;
+
+            let csvContent = "\uFEFF" + headers.join(",") + "\n";
+            filteredData.forEach(row => {
+                const escapedRow = row.map(val => `"${(val || "").replace(/"/g, '""')}"`).join(",");
+                csvContent += escapedRow + "\n";
+            });
+
+            const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", "report_summary_86000_86230.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+
+</body>
+</html>
