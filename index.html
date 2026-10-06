@@ -12,8 +12,9 @@
         .header-panel h2 { color: #fff; border-bottom: none; margin: 0 0 5px 0; }
         .upload-section { background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border-left: 5px solid #3182ce; }
         
-        .dashboard-container { margin-bottom: 20px; }
-        .card-box { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; flex-direction: column; }
+        .dashboard-container { display: flex; gap: 20px; margin-bottom: 20px; flex-wrap: wrap; }
+        .card-box { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; flex-direction: column; flex: 2; min-width: 350px; }
+        .card-box-small { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; flex-direction: column; flex: 1; min-width: 280px; }
         
         .summary-container { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
         .summary-card { background: #fff; padding: 15px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); font-size: 14px; min-width: 140px; flex: 1; border-top: 4px solid #3182ce; }
@@ -29,7 +30,7 @@
 
         .table-responsive { background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 30px; overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 12px 14px; border: 1px solid #e2e8f0; text-align: left; font-size: 14px; }
+        th, td { padding: 10px 12px; border: 1px solid #e2e8f0; text-align: left; font-size: 13px; }
         th { background-color: #2b6cb0; color: white; font-weight: 600; }
         tr:nth-child(even) { background-color: #f7fafc; }
         
@@ -59,12 +60,28 @@
         </div>
     </div>
 
-    <!-- ส่วนแสดงกราฟแท่งกองซ้อนแนวตั้งตามรหัสไปรษณีย์ -->
+    <!-- ส่วนแสดงกราฟและตารางสรุปเคสยังไม่มีการมอบหมายงาน -->
     <div class="dashboard-container">
         <div class="card-box">
             <h3>ที่ทำการที่ยังไม่ได้ปิดงาน ณ.สถานะล่าสุด (แสดง App ที่มีการBooking ของที่ทำการ)</h3>
-            <div style="position: relative; height: 350px; width: 100%;">
+            <div style="position: relative; height: 320px; width: 100%;">
                 <canvas id="postalChart"></canvas>
+            </div>
+        </div>
+        <div class="card-box-small">
+            <h3>ยังไม่มอบหมายงาน (แยกตาม ปณ.)</h3>
+            <div style="max-height: 320px; overflow-y: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>รหัสไปรษณีย์</th>
+                            <th style="text-align: center;">จำนวน (เคส)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="unassignedTableBody">
+                        <tr><td colspan="2" style="text-align: center; color: #a0aec0;">ยังไม่มีข้อมูล</td></tr>
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
@@ -98,16 +115,15 @@
         let showOnlyActive = false;
         let postalChartInstance = null;
 
-        // กำหนดชุดสีมาตรฐานสำหรับแต่ละ App
         const appColorMap = {
-            'POSTSABUY': '#3182ce',    // ฟ้า
-            'LINE_OA': '#38a169',      // เขียว
-            'THP_HOSPITAL': '#dd6b20', // ส้ม
-            'SABUY_FRUIT': '#805ad5',  // ม่วง
-            'THP_POSTSABUY': '#d69e2e',// เหลืองทอง
-            'ISHIPSERVICE': '#e53e3e', // แดง
-            'THP_SHOPEE': '#00b5d8',   // ฟ้าคราม
-            'THP_EXPRESS': '#ed64a6'   // ชมพู
+            'POSTSABUY': '#3182ce',
+            'LINE_OA': '#38a169',
+            'THP_HOSPITAL': '#dd6b20',
+            'SABUY_FRUIT': '#805ad5',
+            'THP_POSTSABUY': '#d69e2e',
+            'ISHIPSERVICE': '#e53e3e',
+            'THP_SHOPEE': '#00b5d8',
+            'THP_EXPRESS': '#ed64a6'
         };
 
         function getAppColor(appName, index) {
@@ -201,7 +217,6 @@
                 });
             }
 
-            // อัปเดตการ์ดตัวเลขรวมด้านบน
             let html = `
                 <div class="summary-card" style="border-top-color: #c53030;">
                     <div class="app-name">รวมยังไม่ปิดงาน</div>
@@ -220,7 +235,41 @@
             }
             document.getElementById("summaryContainer").innerHTML = html;
 
-            // 2. วาดกราฟแท่งกองซ้อนแนวตั้งตามรหัสไปรษณีย์
+            // 2. กรองเคสที่ยังไม่มีการมอบหมายงาน (ชื่อเจ้าหน้าที่ว่าง หรือ null)
+            const officerIdx = headers.findIndex(h => h.includes("ชื่อเจ้าหน้าที่"));
+            let unassignedItems = pendingItems;
+            if (officerIdx !== -1) {
+                unassignedItems = pendingItems.filter(row => {
+                    const officer = row[officerIdx];
+                    return !officer || officer.trim() === "" || officer.toLowerCase() === "null";
+                });
+            }
+
+            const unassignedPostalCounts = {};
+            unassignedItems.forEach(row => {
+                const postal = row[postalIdx] || "ไม่ระบุ";
+                unassignedPostalCounts[postal] = (unassignedPostalCounts[postal] || 0) + 1;
+            });
+
+            const unassignedBody = document.getElementById("unassignedTableBody");
+            unassignedBody.innerHTML = "";
+
+            const sortedUnassignedKeys = Object.keys(unassignedPostalCounts).sort((a, b) => parseInt(a.replace(/\D/g, "")) - parseInt(b.replace(/\D/g, "")));
+
+            if (sortedUnassignedKeys.length === 0) {
+                unassignedBody.innerHTML = `<tr><td colspan="2" style="text-align: center; color: #718096;">ไม่มีเคสค้างมอบหมายงาน</td></tr>`;
+            } else {
+                sortedUnassignedKeys.forEach(postal => {
+                    const tr = document.createElement("tr");
+                    tr.innerHTML = `
+                        <td style="font-weight: bold; color: #2b6cb0;">${postal}</td>
+                        <td style="text-align: center; font-weight: bold; color: #c53030;">${unassignedPostalCounts[postal]} รายการ</td>
+                    `;
+                    unassignedBody.appendChild(tr);
+                });
+            }
+
+            // 3. วาดกราฟแท่งกองซ้อนแนวตั้งตามรหัสไปรษณีย์
             updatePostalVerticalStackedChart(pendingItems, postalIdx, appIdx);
         }
 
@@ -267,14 +316,14 @@
                     datasets: datasets
                 },
                 options: {
-                    indexAxis: 'x', // กราฟแนวตั้ง (Vertical)
+                    indexAxis: 'x',
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: {
                         x: {
                             stacked: true,
                             ticks: {
-                                font: { size: 14, weight: 'bold' },
+                                font: { size: 13, weight: 'bold' },
                                 color: '#1a365d'
                             }
                         },
@@ -289,8 +338,8 @@
                             display: true,
                             position: 'top',
                             labels: {
-                                boxWidth: 14,
-                                font: { size: 13, weight: 'bold' }
+                                boxWidth: 12,
+                                font: { size: 12, weight: 'bold' }
                             }
                         }
                     }
