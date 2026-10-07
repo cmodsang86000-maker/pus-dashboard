@@ -8,9 +8,16 @@
     <style>
         body { font-family: 'Sarabun', 'Segoe UI', Tahoma, sans-serif; margin: 20px; background-color: #f0f3f8; color: #333; }
         h2, h3 { color: #1a365d; border-bottom: 2px solid #cbd5e0; padding-bottom: 8px; margin-top: 25px; }
-        .header-panel { background: #1a365d; color: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        
+        .header-panel { background: #1a365d; color: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
         .header-panel h2 { color: #fff; border-bottom: none; margin: 0 0 5px 0; }
-        .upload-section { background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border-left: 5px solid #3182ce; }
+        
+        .time-badge-box { background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.3); padding: 10px 15px; border-radius: 6px; font-size: 13px; color: #fff; display: flex; flex-direction: column; min-width: 220px; }
+        .time-badge-box .title { font-size: 11px; color: #cbd5e0; text-transform: uppercase; margin-bottom: 2px; }
+        .time-badge-box .time-val { font-size: 15px; font-weight: bold; color: #feebc8; }
+
+        /* ย้ายช่องอัปโหลดมาไว้ด้านล่าง ตกแต่งให้เด่นชัดและแจ้งคีย์ลัด */
+        .upload-section { background: #fff; padding: 20px; border-radius: 8px; margin-top: 30px; margin-bottom: 30px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border-left: 5px solid #2f855a; }
         
         .dashboard-container { display: flex; gap: 20px; margin-bottom: 20px; flex-wrap: wrap; }
         .card-box { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; flex-direction: column; flex: 2; min-width: 350px; }
@@ -28,7 +35,7 @@
         button.btn-success:hover { background-color: #276749; }
         button:disabled { background-color: #cbd5e0; cursor: not-allowed; }
 
-        .table-responsive { background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 30px; overflow-x: auto; }
+        .table-responsive { background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 20px; overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; }
         th, td { padding: 10px 12px; border: 1px solid #e2e8f0; text-align: left; font-size: 13px; }
         th { background-color: #2b6cb0; color: white; font-weight: 600; }
@@ -37,19 +44,20 @@
         .badge-pending { background-color: #feebc8; color: #744210; padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: bold; }
         .badge-closed { background-color: #c6f6d5; color: #22543d; padding: 4px 10px; border-radius: 4px; font-weight: bold; }
         #errorLog { color: #c53030; margin-top: 10px; font-weight: bold; }
+        .shortcut-key { background: #edf2f7; border: 1px solid #cbd5e0; padding: 2px 6px; border-radius: 4px; font-size: 12px; font-weight: bold; color: #2d3748; }
     </style>
 </head>
 <body>
 
     <div class="header-panel">
-        <h2>รายงานติดตามสถานะงานเขตพื้นที่ (รหัสไปรษณีย์ 86000 - 86230)</h2>
-        <p style="margin: 0; color: #e2e8f0; font-size: 14px;">ระบบสรุปและวิเคราะห์ข้อมูลจุดรับสินค้าแยกตามรหัสไปรษณีย์และช่องทาง</p>
-    </div>
-
-    <div class="upload-section">
-        <label for="csvFile" style="font-weight: bold; display: block; margin-bottom: 8px; color: #2d3748;">อัปโหลดไฟล์ข้อมูลรายงาน (CSV รูปแบบ UTF-8):</label>
-        <input type="file" id="csvFile" accept=".csv" onchange="handleFileSelect(event)">
-        <div id="errorLog"></div>
+        <div>
+            <h2>รายงานติดตามสถานะงานเขตพื้นที่ (รหัสไปรษณีย์ 86000 - 86230)</h2>
+            <p style="margin: 0; color: #e2e8f0; font-size: 14px;">ระบบสรุปและวิเคราะห์ข้อมูลจุดรับสินค้าแยกตามรหัสไปรษณีย์และช่องทาง</p>
+        </div>
+        <div class="time-badge-box">
+            <span class="title">⏱ เวลาสถานะล่าสุดในไฟล์</span>
+            <span id="latestStatusTime" class="time-val">- กรุณาอัปโหลดไฟล์ -</span>
+        </div>
     </div>
 
     <!-- ส่วนสรุปตัวเลขแยกตาม App -->
@@ -63,13 +71,13 @@
     <!-- ส่วนแสดงกราฟและตารางสรุปเคสยังไม่มีการมอบหมายงาน -->
     <div class="dashboard-container">
         <div class="card-box">
-            <h3>ที่ทำการที่ยังไม่ได้ปิดงาน ณ.สถานะล่าสุด (แสดง App ที่มีการBooking ของที่ทำการ)</h3>
+            <h3>ที่ทำการที่ยังไม่ได้ปิดงาน ณ.สถานะล่าสุด (แสดง App ที่มีการ Booking ของที่ทำการ)</h3>
             <div style="position: relative; height: 320px; width: 100%;">
                 <canvas id="postalChart"></canvas>
             </div>
         </div>
         <div class="card-box-small">
-            <h3>ยังไม่มอบหมายงาน (แยกตาม ปณ.)</h3>
+            <h3>ปณ.ยังไม่การมอบหมายงาน (สถานะล่าสุด)</h3>
             <div style="max-height: 320px; overflow-y: auto;">
                 <table>
                     <thead>
@@ -97,7 +105,7 @@
         <table id="dataTable">
             <thead>
                 <tr id="tableHeader">
-                    <th>กรุณาอัปโหลดไฟล์ CSV</th>
+                    <th>กรุณาอัปโหลดไฟล์ CSV (ย้ายช่องอัปโหลดไปไว้ด้านล่างสุด)</th>
                 </tr>
             </thead>
             <tbody id="tableBody">
@@ -108,12 +116,30 @@
         </table>
     </div>
 
+    <!-- ย้ายช่องอัปโหลดไฟล์มาไว้ล่างสุดของหน้า พร้อมระบุคีย์ลัด Alt + U -->
+    <div class="upload-section">
+        <label for="csvFile" style="font-weight: bold; display: block; margin-bottom: 8px; color: #2d3748;">
+            อัปโหลดไฟล์ข้อมูลรายงาน (CSV รูปแบบ UTF-8) &nbsp;|&nbsp; 
+            <span style="font-size: 13px; color: #4a5568; font-weight: normal;">คีย์ลัดเปิดเลือกไฟล์: กด <span class="shortcut-key">Alt + U</span></span>
+        </label>
+        <input type="file" id="csvFile" accept=".csv" onchange="handleFileSelect(event)">
+        <div id="errorLog"></div>
+    </div>
+
     <script>
         let headers = [];
         let rawData = [];
         let filteredData = [];
         let showOnlyActive = false;
         let postalChartInstance = null;
+
+        // กำหนดคีย์ลัด Alt + U เพื่อคลิกช่องอัปโหลดไฟล์ทันที
+        document.addEventListener('keydown', function(event) {
+            if (event.altKey && (event.key === 'u' || event.key === 'U')) {
+                event.preventDefault();
+                document.getElementById('csvFile').click();
+            }
+        });
 
         const appColorMap = {
             'POSTSABUY': '#3182ce',
@@ -157,6 +183,7 @@
             const postalIdx = headers.findIndex(h => h.includes("รหัสไปรษณีย์"));
             const appIdx = headers.findIndex(h => h.toUpperCase().includes("APP"));
             const statusIdx = headers.findIndex(h => h.includes("สถานะ") && !h.includes("เวลา"));
+            const timeIdx = headers.findIndex(h => h.includes("เวลาที่ทำรายการล่าสุด"));
 
             if (postalIdx === -1) {
                 document.getElementById("errorLog").innerText = "ไม่พบคอลัมน์ 'รหัสไปรษณีย์' ในไฟล์ กรุณาตรวจสอบหัวตาราง";
@@ -164,6 +191,8 @@
             }
 
             let parsedData = [];
+            let maxTime = "";
+
             for (let i = 1; i < lines.length; i++) {
                 const line = lines[i].trim();
                 if (!line) continue;
@@ -177,7 +206,21 @@
 
                 if (postalNum >= 86000 && postalNum <= 86230) {
                     parsedData.push(row);
+                    
+                    if (timeIdx !== -1 && row[timeIdx]) {
+                        const tVal = row[timeIdx].trim();
+                        if (tVal > maxTime) {
+                            maxTime = tVal;
+                        }
+                    }
                 }
+            }
+
+            const timeDisplay = document.getElementById("latestStatusTime");
+            if (maxTime) {
+                timeDisplay.innerText = maxTime;
+            } else {
+                timeDisplay.innerText = "ไม่พบข้อมูลเวลาในไฟล์";
             }
 
             parsedData.sort((a, b) => {
@@ -208,7 +251,6 @@
                 });
             }
 
-            // 1. สรุปยอดตาม App เพื่อทำ Card ด้านบน
             const appCounts = {};
             if (appIdx !== -1) {
                 pendingItems.forEach(row => {
@@ -235,7 +277,6 @@
             }
             document.getElementById("summaryContainer").innerHTML = html;
 
-            // 2. กรองเคสที่ยังไม่มีการมอบหมายงาน (ชื่อเจ้าหน้าที่ว่าง หรือ null)
             const officerIdx = headers.findIndex(h => h.includes("ชื่อเจ้าหน้าที่"));
             let unassignedItems = pendingItems;
             if (officerIdx !== -1) {
@@ -269,7 +310,6 @@
                 });
             }
 
-            // 3. วาดกราฟแท่งกองซ้อนแนวตั้งตามรหัสไปรษณีย์
             updatePostalVerticalStackedChart(pendingItems, postalIdx, appIdx);
         }
 
